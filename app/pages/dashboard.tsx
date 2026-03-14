@@ -69,6 +69,9 @@ import { CryptoDistributionChart } from '@/components/ui/crypto-distribution-cha
 const WalletButton = dynamic(() => import('../components/WalletButton'), {
   ssr: false,
 });
+const BalanceDisplay = dynamic(() => import('../components/BalanceDisplay'), {
+  ssr: false,
+});
 
 // Decrypt cache - stores decrypted values per handle
 // Key: "handle_walletAddress", Value: { amount, timestamp }
@@ -2098,30 +2101,7 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-3">
               {/* Navbar Balance Display */}
-              {connected && navbarEncryptedHandle && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded border border-gray-200">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-700">Balance:</span>
-                    {navbarDecryptedBalance !== null ? (
-                      <span className="text-sm font-semibold text-bagel-orange">
-                        {formatBalance(navbarDecryptedBalance)} USDBagel
-                      </span>
-                    ) : (
-                      <span className="text-sm text-gray-400">&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;</span>
-                    )}
-                  </div>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleNavbarDecrypt}
-                    disabled={navbarDecrypting}
-                    className="px-2 py-1 text-xs font-medium text-bagel-orange hover:bg-bagel-orange/10 rounded transition-colors disabled:opacity-50"
-                    title={navbarDecryptedBalance !== null ? 'Refresh balance' : 'Decrypt balance'}
-                  >
-                    {navbarDecrypting ? 'Decrypting...' : navbarDecryptedBalance !== null ? 'Refresh' : 'Decrypt'}
-                  </motion.button>
-                </div>
-              )}
+              <BalanceDisplay />
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}

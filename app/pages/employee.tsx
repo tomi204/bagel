@@ -8,6 +8,9 @@ import { useBagel } from "../hooks/useBagel";
 const WalletButton = dynamic(() => import("../components/WalletButton"), {
   ssr: false,
 });
+const BalanceDisplay = dynamic(() => import("../components/BalanceDisplay"), {
+  ssr: false,
+});
 
 export default function EmployeeDashboard() {
   const { address } = useWallet();
@@ -69,13 +72,14 @@ export default function EmployeeDashboard() {
               Employee
             </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link
               href="/employer"
               className="text-sm text-gray-400 hover:text-white"
             >
               Employer View
             </Link>
+            <BalanceDisplay />
             <WalletButton />
           </div>
         </header>

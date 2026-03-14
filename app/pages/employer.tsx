@@ -8,6 +8,9 @@ import { useBagel } from "../hooks/useBagel";
 const WalletButton = dynamic(() => import("../components/WalletButton"), {
   ssr: false,
 });
+const BalanceDisplay = dynamic(() => import("../components/BalanceDisplay"), {
+  ssr: false,
+});
 
 export default function EmployerDashboard() {
   const { address, signer } = useWallet();
@@ -107,13 +110,14 @@ export default function EmployerDashboard() {
               Ethereum + Zama fhEVM
             </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link
               href="/employee"
               className="text-sm text-gray-400 hover:text-white"
             >
               Employee View
             </Link>
+            <BalanceDisplay />
             <WalletButton />
           </div>
         </header>
