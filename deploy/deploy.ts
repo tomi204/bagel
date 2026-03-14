@@ -32,8 +32,20 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     await tx.wait();
     console.log(`Configured CERC20 on BagelPayroll`);
   }
+
+  // 4. Deploy BagelPool (privacy pool for confidential transfers)
+  const deployedPool = await deploy("BagelPool", {
+    from: deployer,
+    log: true,
+    args: [
+      deployedCERC20.address, // token
+      deployer,               // operator (TEE wallet — use deployer for now)
+      300,                    // minDelay: 5 minutes between queue and distribute
+    ],
+  });
+  console.log(`BagelPool: `, deployedPool.address);
 };
 
 export default func;
 func.id = "deploy_bagel_payroll";
-func.tags = ["CERC20", "BagelPayroll"];
+func.tags = ["CERC20", "BagelPayroll", "BagelPool"];

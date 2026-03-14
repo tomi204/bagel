@@ -13,6 +13,8 @@ const PAYROLL_ADDRESS =
   process.env.NEXT_PUBLIC_PAYROLL_ADDRESS || "";
 const CERC20_ADDRESS =
   process.env.NEXT_PUBLIC_CERC20_ADDRESS || "";
+const POOL_ADDRESS =
+  process.env.NEXT_PUBLIC_POOL_ADDRESS || "";
 
 // BagelPayroll ABI (minimal, only what frontend needs)
 const PAYROLL_ABI = [
@@ -234,5 +236,114 @@ export async function getNextBusinessIndex(signer: Signer): Promise<number> {
   return Number(await contract.nextBusinessIndex());
 }
 
+// ================================================================
+// BagelPool (Privacy Pool)
+// ================================================================
+
+const POOL_ABI = [
+  "function queueTransfer(bytes32 encRecipient, bytes32 encAmount, bytes calldata inputProof) external",
+  "function queueLength() external view returns (uint256)",
+  "function getTransferInfo(uint256 index) external view returns (address sender, uint256 timestamp, bool distributed)",
+  "function minDelay() external view returns (uint256)",
+  "event TransferQueued(uint256 indexed index, address indexed sender, uint256 timestamp)",
+];
+
+/**
+ * Get a connected BagelPool contract instance
+ */
+export function getPoolContract(signer: Signer): Contract {
+  return new Contract(POOL_ADDRESS, POOL_ABI, signer);
+}
+
+/**
+ * Private transfer via the BagelPool.
+ * 1. Ensures the pool is authorized as operator on CERC20
+ * 2. Encrypts recipient address + amount
+ * 3. Calls queueTransfer on the pool
+ * 4. Registers the recipient with the TEE distributor API
+ *
+ * On-chain: sender → pool (encrypted amount, encrypted recipient)
+ * Later:    pool → recipient (by TEE operator)
+ */
+export async function privateTransfer(
+  signer: Signer,
+  recipientAddress: string,
+  amount: bigint
+): Promise<{ txHash: string; queueIndex: number }> {
+  if (!POOL_ADDRESS) {
+    throw new Error("BagelPool address not configured (NEXT_PUBLIC_POOL_ADDRESS)");
+  }
+
+  const cerc20 = getCerc20Contract(signer);
+  const pool = getPoolContract(signer);
+  const senderAddress = await signer.getAddress();
+
+  // 1. Ensure pool is authorized as operator (set for 30 days)
+  const isOp = await cerc20.isOperator(senderAddress, POOL_ADDRESS);
+  if (!isOp) {
+    const until = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60; // 30 days
+    const approveTx = await cerc20.setOperator(POOL_ADDRESS, until);
+    await approveTx.wait();
+    console.log("[Pool] Approved pool as operator");
+  }
+
+  // 2. Encrypt recipient address and amount
+  // For the pool, we need to encrypt both the recipient (as address → uint160 → add64)
+  // and the amount in a single encrypted input
+  const recipientBigInt = BigInt(recipientAddress);
+  const encrypted = await encryptValues(POOL_ADDRESS, senderAddress, [
+    recipientBigInt,
+    amount,
+  ]);
+
+  // 3. Queue the transfer on-chain
+  const currentQueueLen = Number(await pool.queueLength());
+  const tx = await pool.queueTransfer(
+    encrypted.handles[0], // encrypted recipient
+    encrypted.handles[1], // encrypted amount
+    encrypted.inputProof
+  );
+  await tx.wait();
+  console.log("[Pool] Transfer queued, tx:", tx.hash);
+
+  // 4. Register recipient with the TEE distributor
+  // (off-chain mapping for hackathon — in production the TEE decrypts on-chain eaddress)
+  try {
+    await fetch("/api/distribute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "register",
+        queueIndex: currentQueueLen,
+        recipient: recipientAddress,
+      }),
+    });
+    console.log("[Pool] Registered recipient with distributor");
+  } catch (err) {
+    console.warn("[Pool] Failed to register with distributor (transfer still queued):", err);
+  }
+
+  return { txHash: tx.hash, queueIndex: currentQueueLen };
+}
+
+/**
+ * Get pool status
+ */
+export async function getPoolStatus(signer: Signer): Promise<{
+  queueLength: number;
+  minDelay: number;
+}> {
+  if (!POOL_ADDRESS) return { queueLength: 0, minDelay: 0 };
+  const pool = getPoolContract(signer);
+  const [queueLen, minDelay] = await Promise.all([
+    pool.queueLength(),
+    pool.minDelay(),
+  ]);
+  return {
+    queueLength: Number(queueLen),
+    minDelay: Number(minDelay),
+  };
+}
+
 // Re-export addresses for use in components
-export { PAYROLL_ADDRESS, CERC20_ADDRESS };
+export { PAYROLL_ADDRESS, CERC20_ADDRESS, POOL_ADDRESS };
