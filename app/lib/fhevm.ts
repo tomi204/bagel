@@ -1,15 +1,12 @@
 /**
  * Zama fhEVM Client Library
  *
- * Uses the official Zama Relayer SDK loaded from CDN.
- * Follows the same pattern as the official Zama dapps repo.
+ * Uses the official Zama Relayer SDK loaded from CDN via _document.tsx.
+ * The SDK is loaded with strategy="beforeInteractive" so it's available
+ * before any JS runs.
  */
 
 import { type Signer } from "ethers";
-
-// CDN URL for the Relayer SDK (same as official Zama dapps)
-const SDK_CDN_URL =
-  "https://cdn.zama.org/relayer-sdk-js/0.4.1/relayer-sdk-js.umd.cjs";
 
 // Types for window.relayerSDK
 interface RelayerSDK {
@@ -70,55 +67,42 @@ let initPromise: Promise<FhevmInstance> | null = null;
 let lastInitError: string | null = null;
 
 /**
- * Load the Relayer SDK from CDN (injects <script> tag)
+ * Wait for the Relayer SDK to be available on window.
+ * The SDK script is loaded via _document.tsx with strategy="beforeInteractive",
+ * but we still wait in case of slow loading.
  */
-function loadRelayerSDK(): Promise<void> {
+function waitForRelayerSDK(timeoutMs = 15000): Promise<RelayerSDK> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("Can only be used in the browser"));
   }
 
-  // Already loaded
+  // Already available
   if (window.relayerSDK && typeof window.relayerSDK.initSDK === "function") {
-    return Promise.resolve();
+    return Promise.resolve(window.relayerSDK);
   }
 
   return new Promise((resolve, reject) => {
-    // Check if script already exists
-    const existing = document.querySelector(`script[src="${SDK_CDN_URL}"]`);
-    if (existing) {
-      if (window.relayerSDK?.initSDK) {
-        resolve();
-      } else {
-        existing.addEventListener("load", () => resolve());
-        existing.addEventListener("error", () =>
-          reject(new Error("Failed to load Relayer SDK"))
-        );
+    const startTime = Date.now();
+
+    const check = () => {
+      if (window.relayerSDK && typeof window.relayerSDK.initSDK === "function") {
+        resolve(window.relayerSDK);
+        return;
       }
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = SDK_CDN_URL;
-    script.type = "text/javascript";
-    script.async = true;
-
-    script.onload = () => {
-      if (!window.relayerSDK?.initSDK || !window.relayerSDK?.createInstance) {
+      if (Date.now() - startTime > timeoutMs) {
         reject(
           new Error(
-            "Relayer SDK loaded but window.relayerSDK is invalid"
+            "Relayer SDK not found on window after " +
+              timeoutMs +
+              "ms. Check that the CDN script loaded correctly."
           )
         );
         return;
       }
-      resolve();
+      setTimeout(check, 100);
     };
 
-    script.onerror = () => {
-      reject(new Error(`Failed to load Relayer SDK from ${SDK_CDN_URL}`));
-    };
-
-    document.head.appendChild(script);
+    check();
   });
 }
 
@@ -147,13 +131,11 @@ export async function initFhevm(
 }
 
 async function _doInit(): Promise<FhevmInstance> {
-  console.log("[fhEVM] Loading Relayer SDK from CDN...");
+  console.log("[fhEVM] Waiting for Relayer SDK...");
 
-  // 1. Load SDK from CDN
-  await loadRelayerSDK();
-  console.log("[fhEVM] Relayer SDK loaded, initializing WASM...");
-
-  const sdk = window.relayerSDK!;
+  // 1. Wait for SDK (loaded via _document.tsx beforeInteractive script)
+  const sdk = await waitForRelayerSDK();
+  console.log("[fhEVM] Relayer SDK found, initializing WASM...");
 
   // 2. Initialize SDK (WASM)
   if (!sdk.__initialized__) {
@@ -165,7 +147,7 @@ async function _doInit(): Promise<FhevmInstance> {
   }
   console.log("[fhEVM] WASM initialized, creating instance...");
 
-  // 3. Get the Eip1193 provider (window.ethereum)
+  // 3. Get the EIP-1193 provider (window.ethereum)
   const eip1193 =
     typeof window !== "undefined" ? (window as any).ethereum : null;
   if (!eip1193) {
@@ -173,7 +155,10 @@ async function _doInit(): Promise<FhevmInstance> {
   }
 
   // 4. Create instance using SepoliaConfig
-  console.log("[fhEVM] SepoliaConfig:", JSON.stringify(sdk.SepoliaConfig, null, 2));
+  console.log(
+    "[fhEVM] SepoliaConfig:",
+    JSON.stringify(sdk.SepoliaConfig, null, 2)
+  );
 
   const config = {
     ...sdk.SepoliaConfig,
@@ -197,10 +182,17 @@ async function ensureInstance(): Promise<FhevmInstance> {
 }
 
 /**
- * Get the current fhEVM instance
+ * Get the current fhEVM instance (null if not yet initialized)
  */
 export function getFhevmInstance(): FhevmInstance | null {
   return instance;
+}
+
+/**
+ * Get initialization error (if any)
+ */
+export function getInitError(): string | null {
+  return lastInitError;
 }
 
 /**
@@ -264,7 +256,10 @@ export async function decryptValue(
   // Sign with wallet
   const signature = await signer.signTypedData(
     eip712.domain as any,
-    { UserDecryptRequestVerification: eip712.types.UserDecryptRequestVerification },
+    {
+      UserDecryptRequestVerification:
+        eip712.types.UserDecryptRequestVerification,
+    },
     eip712.message as any
   );
 
