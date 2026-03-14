@@ -1,105 +1,163 @@
 /**
  * Zama fhEVM Client Library
  *
- * Handles FHE encryption, decryption, and proof generation for BagelPayroll.
- * Uses fhevmjs v0.6 with correct initialization flow.
+ * Uses the official Zama Relayer SDK loaded from CDN.
+ * Follows the same pattern as the official Zama dapps repo.
  */
 
-import { initFhevm as initWasm, createInstance, type FhevmInstance } from "fhevmjs/web";
-import { BrowserProvider, JsonRpcProvider, type Signer } from "ethers";
+import { type Signer } from "ethers";
+
+// CDN URL for the Relayer SDK (same as official Zama dapps)
+const SDK_CDN_URL =
+  "https://cdn.zama.org/relayer-sdk-js/0.4.1/relayer-sdk-js.umd.cjs";
+
+// Types for window.relayerSDK
+interface RelayerSDK {
+  initSDK: (options?: Record<string, unknown>) => Promise<boolean>;
+  createInstance: (config: Record<string, unknown>) => Promise<FhevmInstance>;
+  SepoliaConfig: Record<string, unknown> & {
+    aclContractAddress: string;
+    kmsContractAddress: string;
+    relayerUrl: string;
+  };
+  __initialized__?: boolean;
+}
+
+interface FhevmInstance {
+  createEncryptedInput: (
+    contractAddress: string,
+    userAddress: string
+  ) => EncryptedInput;
+  generateKeypair: () => { publicKey: string; privateKey: string };
+  createEIP712: (
+    publicKey: string,
+    contractAddresses: string[],
+    startTimestamp?: number,
+    durationDays?: number
+  ) => {
+    domain: Record<string, unknown>;
+    types: Record<string, Array<{ name: string; type: string }>>;
+    message: Record<string, unknown>;
+    primaryType: string;
+  };
+  userDecrypt: (
+    requests: Array<{ handle: string; contractAddress: string }>,
+    privateKey: string,
+    publicKey: string,
+    signature: string,
+    contractAddresses: string[],
+    userAddress: string,
+    startTimestamp: number,
+    durationDays: number
+  ) => Promise<Record<string, bigint | string | boolean>>;
+  getPublicKey: () => Uint8Array | null;
+  getPublicParams: (capacity: number) => unknown;
+}
+
+interface EncryptedInput {
+  add64: (value: bigint) => void;
+  encrypt: () => Promise<{ handles: Uint8Array[]; inputProof: Uint8Array }>;
+}
+
+declare global {
+  interface Window {
+    relayerSDK?: RelayerSDK;
+  }
+}
 
 let instance: FhevmInstance | null = null;
 
-// Known Zama network addresses
-const ZAMA_SEPOLIA = {
-  aclAddress: "0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D",
-  kmsAddress: "0xbE0E383937d564D7FF0BC3b46c51f0bF8d5C311A",
-  gatewayUrl: "https://gateway.zama.ai",
-};
-
-const GATEWAY_URL =
-  process.env.NEXT_PUBLIC_GATEWAY_URL || ZAMA_SEPOLIA.gatewayUrl;
-
-// Override via env vars, or fall back to known network defaults
-const ACL_CONTRACT_ADDRESS =
-  process.env.NEXT_PUBLIC_ACL_ADDRESS || "";
-const KMS_CONTRACT_ADDRESS =
-  process.env.NEXT_PUBLIC_KMS_ADDRESS || "";
-
 /**
- * Try to fetch FHE contract addresses from a local Hardhat node
- * via the fhevm_relayer_metadata RPC call.
+ * Load the Relayer SDK from CDN (injects <script> tag)
  */
-async function fetchHardhatMetadata(
-  rpcUrl: string
-): Promise<{ aclContractAddress: string; kmsContractAddress: string } | null> {
-  try {
-    const rpc = new JsonRpcProvider(rpcUrl);
-    const metadata = await rpc.send("fhevm_relayer_metadata", []);
-    rpc.destroy();
-
-    if (
-      metadata &&
-      typeof metadata === "object" &&
-      typeof metadata.ACLAddress === "string" &&
-      typeof metadata.KMSVerifierAddress === "string"
-    ) {
-      return {
-        aclContractAddress: metadata.ACLAddress,
-        kmsContractAddress: metadata.KMSVerifierAddress,
-      };
-    }
-  } catch {
-    // Not a fhevm Hardhat node or not reachable
+function loadRelayerSDK(): Promise<void> {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Can only be used in the browser"));
   }
-  return null;
+
+  // Already loaded
+  if (window.relayerSDK && typeof window.relayerSDK.initSDK === "function") {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    // Check if script already exists
+    const existing = document.querySelector(`script[src="${SDK_CDN_URL}"]`);
+    if (existing) {
+      if (window.relayerSDK?.initSDK) {
+        resolve();
+      } else {
+        existing.addEventListener("load", () => resolve());
+        existing.addEventListener("error", () =>
+          reject(new Error("Failed to load Relayer SDK"))
+        );
+      }
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = SDK_CDN_URL;
+    script.type = "text/javascript";
+    script.async = true;
+
+    script.onload = () => {
+      if (!window.relayerSDK?.initSDK || !window.relayerSDK?.createInstance) {
+        reject(
+          new Error(
+            "Relayer SDK loaded but window.relayerSDK is invalid"
+          )
+        );
+        return;
+      }
+      resolve();
+    };
+
+    script.onerror = () => {
+      reject(new Error(`Failed to load Relayer SDK from ${SDK_CDN_URL}`));
+    };
+
+    document.head.appendChild(script);
+  });
 }
 
 /**
  * Initialize the fhEVM instance (call once on wallet connect)
  */
-export async function initFhevm(provider: BrowserProvider): Promise<FhevmInstance> {
+export async function initFhevm(
+  provider: unknown
+): Promise<FhevmInstance> {
   if (instance) return instance;
 
-  // 1. Initialize WASM modules
-  await initWasm();
+  // 1. Load SDK from CDN
+  await loadRelayerSDK();
 
-  // 2. Resolve ACL and KMS contract addresses
-  let aclAddress = ACL_CONTRACT_ADDRESS;
-  let kmsAddress = KMS_CONTRACT_ADDRESS;
+  const sdk = window.relayerSDK!;
 
-  // Resolve addresses from network if not set via env vars
-  if (!aclAddress || !kmsAddress) {
-    const network = await provider.getNetwork();
-    const chainId = Number(network.chainId);
-
-    if (chainId === 11155111) {
-      // Ethereum Sepolia — use known Zama addresses
-      aclAddress = aclAddress || ZAMA_SEPOLIA.aclAddress;
-      kmsAddress = kmsAddress || ZAMA_SEPOLIA.kmsAddress;
-    } else if (chainId === 31337) {
-      // Local Hardhat — fetch addresses from node
-      const metadata = await fetchHardhatMetadata("http://127.0.0.1:8545");
-      if (metadata) {
-        aclAddress = metadata.aclContractAddress;
-        kmsAddress = metadata.kmsContractAddress;
-      }
+  // 2. Initialize SDK (WASM)
+  if (!sdk.__initialized__) {
+    const result = await sdk.initSDK();
+    sdk.__initialized__ = result;
+    if (!result) {
+      throw new Error("Relayer SDK initSDK failed");
     }
   }
 
-  if (!aclAddress || !kmsAddress) {
-    throw new Error(
-      "FHE contract addresses not configured. Set NEXT_PUBLIC_ACL_ADDRESS and NEXT_PUBLIC_KMS_ADDRESS, or run a local Hardhat node with @fhevm/hardhat-plugin."
-    );
+  // 3. Get the Eip1193 provider (window.ethereum)
+  const eip1193 =
+    typeof window !== "undefined" ? (window as any).ethereum : null;
+  if (!eip1193) {
+    throw new Error("No EIP-1193 provider found (MetaMask not installed?)");
   }
 
-  // 3. Create fhEVM instance
-  instance = await createInstance({
-    kmsContractAddress: kmsAddress,
-    aclContractAddress: aclAddress,
-    network: provider.provider as any,
-    gatewayUrl: GATEWAY_URL,
-  });
+  // 4. Create instance using SepoliaConfig
+  const config = {
+    ...sdk.SepoliaConfig,
+    relayerUrl: `${sdk.SepoliaConfig.relayerUrl}/v2`,
+    network: eip1193,
+    relayerRouteVersion: 2,
+  };
+
+  instance = await sdk.createInstance(config);
 
   return instance;
 }
@@ -144,7 +202,7 @@ export async function encryptValues(
 }
 
 /**
- * Decrypt an encrypted value via reencryption
+ * Decrypt an encrypted value via userDecrypt
  */
 export async function decryptValue(
   handle: bigint,
@@ -154,25 +212,47 @@ export async function decryptValue(
   if (!instance) throw new Error("fhEVM not initialized");
 
   const address = await signer.getAddress();
+  const handleHex = "0x" + handle.toString(16).padStart(64, "0");
 
-  // Generate keypair for reencryption
+  // Generate keypair
   const keypair = instance.generateKeypair();
-  const eip712 = instance.createEIP712(keypair.publicKey, contractAddress);
 
-  const signature = await signer.signTypedData(
-    eip712.domain,
-    eip712.types,
-    eip712.message
+  // Create EIP712 for signing
+  const now = Math.floor(Date.now() / 1000);
+  const durationDays = 1;
+  const eip712 = instance.createEIP712(
+    keypair.publicKey,
+    [contractAddress],
+    now,
+    durationDays
   );
 
-  return instance.reencrypt(
-    handle,
+  // Sign with wallet
+  const signature = await signer.signTypedData(
+    eip712.domain as any,
+    { UserDecryptRequestVerification: eip712.types.UserDecryptRequestVerification },
+    eip712.message as any
+  );
+
+  // Call userDecrypt
+  const results = await instance.userDecrypt(
+    [{ handle: handleHex, contractAddress }],
     keypair.privateKey,
     keypair.publicKey,
     signature,
-    contractAddress,
-    address
+    [contractAddress],
+    address,
+    now,
+    durationDays
   );
+
+  // Result is keyed by handle
+  const result = results[handleHex];
+  if (result === undefined) {
+    throw new Error("Decryption returned no result for handle");
+  }
+
+  return BigInt(result as string | bigint);
 }
 
 /**
