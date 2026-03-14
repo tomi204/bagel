@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Hardhat
+cache/
+artifacts/
+typechain-types/
+coverage/
+coverage.json
+
+# Build
+dist/
+*.tsbuildinfo
+
+# Next.js
+.next/
+out/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Misc
+.DS_Store
+*.pem
+*.log
+
+# TypeChain generated types
+types/
+
+# fhEVM temp files
+fhevmTemp/
+
+# Claude Code
+.claude/
+
+# Bun lockfile (use npm)
+bun.lock
+
+# IDEs
+.idea/
+.vscode/
+*.swp
