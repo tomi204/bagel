@@ -66,6 +66,8 @@ declare global {
 }
 
 let instance: FhevmInstance | null = null;
+let initPromise: Promise<FhevmInstance> | null = null;
+let lastInitError: string | null = null;
 
 /**
  * Load the Relayer SDK from CDN (injects <script> tag)
@@ -121,15 +123,35 @@ function loadRelayerSDK(): Promise<void> {
 }
 
 /**
- * Initialize the fhEVM instance (call once on wallet connect)
+ * Initialize the fhEVM instance.
+ * Safe to call multiple times — deduplicates concurrent calls.
  */
 export async function initFhevm(
-  provider: unknown
+  _provider?: unknown
 ): Promise<FhevmInstance> {
   if (instance) return instance;
 
+  // Deduplicate concurrent init calls
+  if (initPromise) return initPromise;
+
+  initPromise = _doInit();
+
+  try {
+    const result = await initPromise;
+    return result;
+  } catch (err: any) {
+    lastInitError = err?.message || "Unknown fhEVM init error";
+    initPromise = null; // Allow retry
+    throw err;
+  }
+}
+
+async function _doInit(): Promise<FhevmInstance> {
+  console.log("[fhEVM] Loading Relayer SDK from CDN...");
+
   // 1. Load SDK from CDN
   await loadRelayerSDK();
+  console.log("[fhEVM] Relayer SDK loaded, initializing WASM...");
 
   const sdk = window.relayerSDK!;
 
@@ -138,18 +160,21 @@ export async function initFhevm(
     const result = await sdk.initSDK();
     sdk.__initialized__ = result;
     if (!result) {
-      throw new Error("Relayer SDK initSDK failed");
+      throw new Error("Relayer SDK initSDK() returned false");
     }
   }
+  console.log("[fhEVM] WASM initialized, creating instance...");
 
   // 3. Get the Eip1193 provider (window.ethereum)
   const eip1193 =
     typeof window !== "undefined" ? (window as any).ethereum : null;
   if (!eip1193) {
-    throw new Error("No EIP-1193 provider found (MetaMask not installed?)");
+    throw new Error("No EIP-1193 provider (install MetaMask)");
   }
 
   // 4. Create instance using SepoliaConfig
+  console.log("[fhEVM] SepoliaConfig:", JSON.stringify(sdk.SepoliaConfig, null, 2));
+
   const config = {
     ...sdk.SepoliaConfig,
     relayerUrl: `${sdk.SepoliaConfig.relayerUrl}/v2`,
@@ -158,8 +183,17 @@ export async function initFhevm(
   };
 
   instance = await sdk.createInstance(config);
+  console.log("[fhEVM] Instance created successfully!");
 
   return instance;
+}
+
+/**
+ * Ensure fhEVM is initialized, auto-init if needed.
+ */
+async function ensureInstance(): Promise<FhevmInstance> {
+  if (instance) return instance;
+  return initFhevm();
 }
 
 /**
@@ -177,9 +211,9 @@ export async function encryptValue(
   userAddress: string,
   value: bigint
 ): Promise<{ handles: Uint8Array[]; inputProof: Uint8Array }> {
-  if (!instance) throw new Error("fhEVM not initialized");
+  const inst = await ensureInstance();
 
-  const input = instance.createEncryptedInput(contractAddress, userAddress);
+  const input = inst.createEncryptedInput(contractAddress, userAddress);
   input.add64(value);
   return input.encrypt();
 }
@@ -192,9 +226,9 @@ export async function encryptValues(
   userAddress: string,
   values: bigint[]
 ): Promise<{ handles: Uint8Array[]; inputProof: Uint8Array }> {
-  if (!instance) throw new Error("fhEVM not initialized");
+  const inst = await ensureInstance();
 
-  const input = instance.createEncryptedInput(contractAddress, userAddress);
+  const input = inst.createEncryptedInput(contractAddress, userAddress);
   for (const val of values) {
     input.add64(val);
   }
@@ -209,18 +243,18 @@ export async function decryptValue(
   contractAddress: string,
   signer: Signer
 ): Promise<bigint> {
-  if (!instance) throw new Error("fhEVM not initialized");
+  const inst = await ensureInstance();
 
   const address = await signer.getAddress();
   const handleHex = "0x" + handle.toString(16).padStart(64, "0");
 
   // Generate keypair
-  const keypair = instance.generateKeypair();
+  const keypair = inst.generateKeypair();
 
   // Create EIP712 for signing
   const now = Math.floor(Date.now() / 1000);
   const durationDays = 1;
-  const eip712 = instance.createEIP712(
+  const eip712 = inst.createEIP712(
     keypair.publicKey,
     [contractAddress],
     now,
@@ -235,7 +269,7 @@ export async function decryptValue(
   );
 
   // Call userDecrypt
-  const results = await instance.userDecrypt(
+  const results = await inst.userDecrypt(
     [{ handle: handleHex, contractAddress }],
     keypair.privateKey,
     keypair.publicKey,

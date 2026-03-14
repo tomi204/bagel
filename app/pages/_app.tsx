@@ -52,11 +52,10 @@ export default function App({ Component, pageProps }: AppProps) {
       setChainId(Number(network.chainId));
 
       // Initialize fhEVM (non-blocking — wallet connects even if FHE init fails)
-      try {
-        await initFhevmClient(browserProvider);
-      } catch (fhevmErr) {
-        console.warn("fhEVM init failed (FHE operations will be unavailable):", fhevmErr);
-      }
+      initFhevmClient(browserProvider).catch((fhevmErr) => {
+        console.error("[fhEVM] Init failed during wallet connect:", fhevmErr);
+        // Not fatal — encrypt/decrypt will auto-retry init when called
+      });
     } catch (err) {
       console.error("Connection error:", err);
     } finally {
