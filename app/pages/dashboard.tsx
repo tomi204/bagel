@@ -119,8 +119,11 @@ function getRelativeTime(timestamp: number): string {
 // Sidebar navigation items
 const navItems = [
   { icon: House, label: 'Home', href: '/dashboard', active: true },
-  { icon: Users, label: 'Employer', href: '/employer' },
-  { icon: PaperPlaneTilt, label: 'Employee', href: '/employee' },
+  { icon: Users, label: 'Employees', href: '/employees' },
+  { icon: PaperPlaneTilt, label: 'Send Payment', href: '/send' },
+  { icon: ClockCounterClockwise, label: 'Transaction History', href: '/history' },
+  { icon: Wallet, label: 'Wallets', href: '/wallets' },
+  { icon: ChartBar, label: 'Reports', href: '/reports' },
 ];
 
 // Privacy features
