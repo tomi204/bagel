@@ -71,7 +71,7 @@ function FlipCard({
                 >
                     <img
                         src={src}
-                        alt={isEth ? "ETH" : "USDC"}
+                        alt={isEth ? "ETH" : "USDB"}
                         className="h-full w-full object-contain"
                     />
                     <div className="absolute inset-0 bg-black/5 transition-colors group-hover:bg-transparent rounded-full" />
@@ -79,12 +79,12 @@ function FlipCard({
 
                 {/* Back Face */}
                 <div
-                    className={`absolute inset-0 h-full w-full overflow-hidden rounded-full shadow-lg flex flex-col items-center justify-center p-2 border-2 ${isEth ? 'bg-gradient-to-br from-[#627EEA] to-[#3C3C3D] border-[#627EEA]' : 'bg-gradient-to-br from-[#2775CA] to-[#1A5FB4] border-[#2775CA]'}`}
+                    className={`absolute inset-0 h-full w-full overflow-hidden rounded-full shadow-lg flex flex-col items-center justify-center p-2 border-2 ${isEth ? 'bg-gradient-to-br from-[#627EEA] to-[#3C3C3D] border-[#627EEA]' : 'bg-gradient-to-br from-[#FF6B35] to-[#E85A2A] border-[#FF6B35]'}`}
                     style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
                 >
                     <div className="text-center">
-                        <p className="text-[10px] font-bold text-white uppercase tracking-wide">{isEth ? 'ETH' : 'USDC'}</p>
-                        <p className="text-[8px] font-medium text-white/80">{isEth ? 'Ethereum' : 'USD Coin'}</p>
+                        <p className="text-[10px] font-bold text-white uppercase tracking-wide">{isEth ? 'ETH' : 'USDB'}</p>
+                        <p className="text-[8px] font-medium text-white/80">{isEth ? 'Ethereum' : 'USDBagel'}</p>
                     </div>
                 </div>
             </motion.div>
@@ -96,12 +96,12 @@ function FlipCard({
 const TOTAL_IMAGES = 20;
 const MAX_SCROLL = 3000; // Virtual scroll range
 
-// Crypto Coin Images - USDC and ETH alternating
-const USDC_LOGO = "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=035";
+// Crypto Coin Images - USDBagel and ETH alternating
+const USDB_LOGO = "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=035";
 const ETH_LOGO = "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=035";
 
-// Repeat USDC and ETH to fill the array
-const IMAGES = Array.from({ length: 20 }, (_, i) => i % 2 === 0 ? ETH_LOGO : USDC_LOGO);
+// Repeat USDB and ETH to fill the array
+const IMAGES = Array.from({ length: 20 }, (_, i) => i % 2 === 0 ? ETH_LOGO : USDB_LOGO);
 
 // Helper for linear interpolation
 const lerp = (start: number, end: number, t: number) => start * (1 - t) + end * t;

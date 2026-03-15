@@ -63,9 +63,35 @@ async function decryptAddress(
  * In production, the TEE would decrypt on-chain eaddress handles directly.
  */
 
-// In-memory mapping of queue index -> recipient address
-// In production this would be in a TEE-sealed database
-const pendingRecipients = new Map<number, string>();
+// File-based mapping of queue index -> recipient address
+// Persists across server restarts (in production this would be in a TEE-sealed database)
+import fs from "fs";
+import path from "path";
+
+const RECIPIENTS_FILE = path.join(process.cwd(), ".bagel-pool-recipients.json");
+
+function loadRecipients(): Map<number, string> {
+  try {
+    if (fs.existsSync(RECIPIENTS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(RECIPIENTS_FILE, "utf-8"));
+      return new Map(Object.entries(data).map(([k, v]) => [Number(k), v as string]));
+    }
+  } catch {}
+  return new Map();
+}
+
+function saveRecipients(map: Map<number, string>) {
+  const obj: Record<string, string> = {};
+  map.forEach((v, k) => { obj[k.toString()] = v; });
+  fs.writeFileSync(RECIPIENTS_FILE, JSON.stringify(obj, null, 2));
+}
+
+// Lazy-loaded persistent map
+let _cachedRecipients: Map<number, string> | null = null;
+function getPendingRecipients(): Map<number, string> {
+  if (!_cachedRecipients) _cachedRecipients = loadRecipients();
+  return _cachedRecipients;
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -79,7 +105,8 @@ export default async function handler(
       return res.status(400).json({ error: "Invalid queueIndex or recipient" });
     }
 
-    pendingRecipients.set(queueIndex, recipient);
+    getPendingRecipients().set(queueIndex, recipient);
+    saveRecipients(getPendingRecipients());
     console.log(`[Distributor] Registered recipient for index ${queueIndex}: ${recipient}`);
 
     return res.status(200).json({ success: true, queueIndex });
@@ -112,7 +139,7 @@ export default async function handler(
         if (distributed) continue;
         if (now < Number(timestamp) + minDelay) continue;
 
-        const recipient = pendingRecipients.get(i);
+        const recipient = getPendingRecipients().get(i);
         if (!recipient) {
           console.log(`[Distributor] No recipient registered for index ${i}, skipping`);
           continue;
@@ -145,8 +172,9 @@ export default async function handler(
 
       // Clean up registered recipients
       for (const idx of indicesToDistribute) {
-        pendingRecipients.delete(idx);
+        getPendingRecipients().delete(idx);
       }
+      saveRecipients(getPendingRecipients());
 
       console.log(`[Distributor] Distributed ${indicesToDistribute.length} transfers, tx: ${txHash}`);
 
@@ -190,7 +218,7 @@ export default async function handler(
         pending,
         distributed,
         minDelay,
-        pendingRecipients: pendingRecipients.size,
+        pendingRecipients: getPendingRecipients().size,
       });
     } catch (err: any) {
       return res.status(500).json({ error: err?.message || "Failed to read pool" });

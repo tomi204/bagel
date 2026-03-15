@@ -10,7 +10,7 @@ const BAGEL_DARK = "#2D2D2A"
 
 const cryptoData = [
   { name: "ETH", value: 45, color: BAGEL_ORANGE },
-  { name: "USDC", value: 25, color: BAGEL_SESAME },
+  { name: "USDB", value: 25, color: BAGEL_SESAME },
   { name: "USDT", value: 20, color: "#E85A2A" },
   { name: "Other", value: 10, color: BAGEL_DARK },
 ]
