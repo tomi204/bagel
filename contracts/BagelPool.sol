@@ -116,6 +116,10 @@ contract BagelPool is ZamaEthereumConfig, Ownable2Step {
         eaddress recipient = FHE.fromExternal(encRecipient, inputProof);
         euint64 amount = FHE.fromExternal(encAmount, inputProof);
 
+        // Allow the CERC20 token contract to access the encrypted amount handle
+        // (required because confidentialTransferFrom runs in the token's context)
+        FHE.allow(amount, address(token));
+
         // Pull tokens from sender to this contract
         // Requires sender to have set this contract as operator on the CERC20
         euint64 transferred = token.confidentialTransferFrom(msg.sender, address(this), amount);
@@ -160,6 +164,9 @@ contract BagelPool is ZamaEthereumConfig, Ownable2Step {
 
         t.distributed = true;
 
+        // Allow the token contract to access the encrypted amount handle
+        FHE.allow(t.encAmount, address(token));
+
         // Transfer from pool to the actual recipient
         token.confidentialTransfer(recipient, t.encAmount);
 
@@ -182,6 +189,7 @@ contract BagelPool is ZamaEthereumConfig, Ownable2Step {
             if (block.timestamp < t.timestamp + minDelay) revert TooEarly();
 
             t.distributed = true;
+            FHE.allow(t.encAmount, address(token));
             token.confidentialTransfer(recipients[i], t.encAmount);
 
             emit TransferDistributed(indices[i], block.timestamp);

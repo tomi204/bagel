@@ -53,6 +53,7 @@ interface FhevmInstance {
 
 interface EncryptedInput {
   add64: (value: bigint) => void;
+  addAddress: (value: string) => void;
   encrypt: () => Promise<{ handles: Uint8Array[]; inputProof: Uint8Array }>;
 }
 
@@ -224,6 +225,24 @@ export async function encryptValues(
   for (const val of values) {
     input.add64(val);
   }
+  return input.encrypt();
+}
+
+/**
+ * Create encrypted input with an address + a uint64 value.
+ * Used by BagelPool: encrypt recipient (eaddress) + amount (euint64) together.
+ */
+export async function encryptAddressAndValue(
+  contractAddress: string,
+  userAddress: string,
+  address: string,
+  value: bigint
+): Promise<{ handles: Uint8Array[]; inputProof: Uint8Array }> {
+  const inst = await ensureInstance();
+
+  const input = inst.createEncryptedInput(contractAddress, userAddress);
+  input.addAddress(address);
+  input.add64(value);
   return input.encrypt();
 }
 

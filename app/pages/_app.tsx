@@ -39,27 +39,6 @@ export default function App({ Component, pageProps }: AppProps) {
   const [fhevmReady, setFhevmReady] = useState(false);
   const [fhevmError, setFhevmError] = useState<string | null>(null);
 
-  // Initialize fhEVM eagerly on mount (SDK is already loaded via _document.tsx)
-  useEffect(() => {
-    if (typeof window === "undefined" || !(window as any).ethereum) return;
-
-    // Give the beforeInteractive script a moment to fully execute
-    const timer = setTimeout(() => {
-      initFhevmClient()
-        .then(() => {
-          console.log("[App] fhEVM initialized successfully");
-          setFhevmReady(true);
-          setFhevmError(null);
-        })
-        .catch((err) => {
-          console.error("[App] fhEVM init failed:", err);
-          setFhevmError(err?.message || "fhEVM initialization failed");
-        });
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, []);
-
   const connect = async () => {
     if (typeof window === "undefined" || !(window as any).ethereum) {
       alert("Please install MetaMask");
@@ -78,15 +57,20 @@ export default function App({ Component, pageProps }: AppProps) {
       setAddress(userAddress);
       setChainId(Number(network.chainId));
 
-      // Try to init fhEVM if it hasn't been initialized yet
+      // Initialize fhEVM after wallet is connected
+      // (SDK needs an active provider to call Zama infrastructure contracts)
       if (!getFhevmInstance()) {
-        initFhevmClient().then(() => {
+        try {
+          await initFhevmClient();
+          console.log("[App] fhEVM initialized successfully");
           setFhevmReady(true);
           setFhevmError(null);
-        }).catch((fhevmErr) => {
-          console.error("[fhEVM] Init failed during wallet connect:", fhevmErr);
+        } catch (fhevmErr: any) {
+          console.error("[fhEVM] Init failed:", fhevmErr);
           setFhevmError(fhevmErr?.message || "fhEVM initialization failed");
-        });
+        }
+      } else {
+        setFhevmReady(true);
       }
     } catch (err) {
       console.error("Connection error:", err);

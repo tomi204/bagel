@@ -59,8 +59,10 @@ import {
   setEmployeeAddress as setEmployeeAddressTx,
   accrueSalary as accrueSalaryTx,
   requestWithdrawal as requestWithdrawalTx,
+  privateTransfer,
   PAYROLL_ADDRESS,
   CERC20_ADDRESS,
+  POOL_ADDRESS,
 } from '../lib/contract-client';
 import { decryptValue, encryptValue } from '../lib/fhevm';
 import { PayrollChart } from '@/components/ui/payroll-chart';
@@ -1809,23 +1811,35 @@ export default function Dashboard() {
     return tx.hash;
   }, [address, signer]);
 
-  // Confidential transfer via CERC20
+  // Private transfer via BagelPool (breaks sender-recipient link on-chain)
   const handleTransfer = useCallback(async (recipientAddress: string, amount: number): Promise<string> => {
     if (!address || !signer) {
       throw new Error('Wallet not connected');
     }
 
-    console.log('Initiating confidential transfer...');
-    console.log('   To:', recipientAddress);
-    console.log('   Amount:', amount, 'USDBagel');
+    console.log('Initiating private transfer via BagelPool...');
+    console.log('   To:', recipientAddress, '(encrypted on-chain)');
+    console.log('   Amount:', amount, 'USDBagel', '(encrypted on-chain)');
 
     const amountUnits = BigInt(Math.floor(amount * 1_000_000));
-    const encrypted = await encryptValue(CERC20_ADDRESS, address, amountUnits);
 
+    // If pool is configured, use private transfer (breaks on-chain link)
+    // Otherwise fall back to direct confidential transfer
+    if (POOL_ADDRESS) {
+      const result = await privateTransfer(signer, recipientAddress, amountUnits);
+      console.log('Private transfer queued:', result.txHash, 'index:', result.queueIndex);
+      toast.success('Transfer queued privately!', {
+        description: `Your transfer is queued in the privacy pool (index #${result.queueIndex}). The TEE operator will distribute it after the delay period.`,
+        duration: 6000,
+      });
+      return result.txHash;
+    }
+
+    // Fallback: direct confidential transfer (amount encrypted, but sender-recipient link visible)
+    const encrypted = await encryptValue(CERC20_ADDRESS, address, amountUnits);
     const cerc20 = getCerc20Contract(signer);
     const tx = await cerc20.confidentialTransfer(recipientAddress, encrypted.handles[0], encrypted.inputProof);
     await tx.wait();
-
     console.log('Confidential transfer successful:', tx.hash);
     return tx.hash;
   }, [address, signer]);
@@ -1944,18 +1958,26 @@ export default function Dashboard() {
     setPayingEmployee(employee.id);
 
     try {
-      console.log('Paying employee via confidential token transfer...');
+      console.log('Paying employee via privacy pool...');
       console.log(`   Employee: ${employee.name} (${employee.fullWallet})`);
       console.log(`   Amount: ${monthlyAmount} USDBagel`);
 
       const amountUnits = BigInt(Math.floor(monthlyAmount * 1_000_000));
-      const encrypted = await encryptValue(CERC20_ADDRESS, address, amountUnits);
+      let txHash: string;
 
-      const cerc20 = getCerc20Contract(signer);
-      const tx = await cerc20.confidentialTransfer(employee.fullWallet, encrypted.handles[0], encrypted.inputProof);
-      await tx.wait();
+      if (POOL_ADDRESS) {
+        const result = await privateTransfer(signer, employee.fullWallet, amountUnits);
+        txHash = result.txHash;
+        console.log('Employee payment queued privately:', txHash);
+      } else {
+        const encrypted = await encryptValue(CERC20_ADDRESS, address, amountUnits);
+        const cerc20 = getCerc20Contract(signer);
+        const tx = await cerc20.confidentialTransfer(employee.fullWallet, encrypted.handles[0], encrypted.inputProof);
+        await tx.wait();
+        txHash = tx.hash;
+      }
 
-      console.log('Employee paid!', tx.hash);
+      console.log('Employee paid!', txHash);
 
       // Update employee status
       setEmployees(prev => prev.map(e =>

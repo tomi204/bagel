@@ -6,7 +6,7 @@
  */
 
 import { Contract, BrowserProvider, type Signer, type ContractTransactionResponse } from "ethers";
-import { encryptValue, encryptValues } from "./fhevm";
+import { encryptValue, encryptValues, encryptAddressAndValue } from "./fhevm";
 
 // Contract addresses (from deployment)
 const PAYROLL_ADDRESS =
@@ -287,14 +287,13 @@ export async function privateTransfer(
     console.log("[Pool] Approved pool as operator");
   }
 
-  // 2. Encrypt recipient address and amount
-  // For the pool, we need to encrypt both the recipient (as address → uint160 → add64)
-  // and the amount in a single encrypted input
-  const recipientBigInt = BigInt(recipientAddress);
-  const encrypted = await encryptValues(POOL_ADDRESS, senderAddress, [
-    recipientBigInt,
-    amount,
-  ]);
+  // 2. Encrypt recipient address (eaddress) and amount (euint64) together
+  const encrypted = await encryptAddressAndValue(
+    POOL_ADDRESS,
+    senderAddress,
+    recipientAddress,
+    amount
+  );
 
   // 3. Queue the transfer on-chain
   const currentQueueLen = Number(await pool.queueLength());
