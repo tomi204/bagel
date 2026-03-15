@@ -139,7 +139,7 @@ export default function Landing() {
                     </motion.a>
                   ))}
                   <motion.a
-                    href="https://github.com/ConejoCapital/Bagel"
+                    href="https://github.com/tomi204/bagel"
                     target="_blank"
                     rel="noopener noreferrer"
                     initial={{ opacity: 0, y: -10 }}
@@ -193,7 +193,7 @@ export default function Landing() {
                       <a href="#features" className="text-gray-600 hover:text-bagel-dark text-sm font-medium">Features</a>
                       <a href="#how-it-works" className="text-gray-600 hover:text-bagel-dark text-sm font-medium">How it works</a>
                       <a href="#architecture" className="text-gray-600 hover:text-bagel-dark text-sm font-medium">Architecture</a>
-                      <a href="https://github.com/ConejoCapital/Bagel" className="text-gray-600 hover:text-bagel-dark text-sm font-medium flex items-center gap-1">
+                      <a href="https://github.com/tomi204/bagel" className="text-gray-600 hover:text-bagel-dark text-sm font-medium flex items-center gap-1">
                         <Github size={16} /> GitHub
                       </a>
                       <Link href="/dashboard" className="btn-primary text-sm text-center">Launch App</Link>
@@ -254,7 +254,7 @@ export default function Landing() {
                     <motion.a
                       whileHover={{ scale: 1.02, y: -2 }}
                       whileTap={{ scale: 0.98 }}
-                      href="https://github.com/ConejoCapital/Bagel"
+                      href="https://github.com/tomi204/bagel"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="btn-secondary text-center px-8 py-4 text-base flex items-center justify-center gap-2"
@@ -840,7 +840,7 @@ const balance = await fhevm.userDecryptEuint(
                     <motion.a
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      href="https://github.com/ConejoCapital/Bagel"
+                      href="https://github.com/tomi204/bagel"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="btn-secondary flex items-center gap-2"
@@ -965,7 +965,7 @@ const balance = await fhevm.userDecryptEuint(
                   <h4 className="text-bagel-dark font-semibold mb-4">Resources</h4>
                   <ul className="space-y-3">
                     <li><a href="https://docs-bagel.vercel.app/docs/intro" target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-bagel-orange transition-colors text-sm">Documentation</a></li>
-                    <li><a href="https://github.com/ConejoCapital/Bagel" className="text-gray-600 hover:text-bagel-orange transition-colors text-sm flex items-center gap-1"><Github size={14} /> GitHub</a></li>
+                    <li><a href="https://github.com/tomi204/bagel" className="text-gray-600 hover:text-bagel-orange transition-colors text-sm flex items-center gap-1"><Github size={14} /> GitHub</a></li>
                     <li><a href="https://sepolia.etherscan.io" target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-bagel-orange transition-colors text-sm flex items-center gap-1"><ExternalLink size={14} /> Etherscan</a></li>
                   </ul>
                 </div>
