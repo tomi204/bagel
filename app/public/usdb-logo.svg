@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <circle cx="100" cy="100" r="96" fill="#FF6B35"/>
+  <circle cx="100" cy="100" r="50" fill="#F7F7F2"/>
+  <circle cx="100" cy="100" r="30" fill="#FF6B35"/>
+  <text x="100" y="185" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="white">USDB</text>
+</svg>

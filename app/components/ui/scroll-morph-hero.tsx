@@ -97,7 +97,7 @@ const TOTAL_IMAGES = 20;
 const MAX_SCROLL = 3000; // Virtual scroll range
 
 // Crypto Coin Images - USDBagel and ETH alternating
-const USDB_LOGO = "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=035";
+const USDB_LOGO = "/usdb-logo.svg";
 const ETH_LOGO = "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=035";
 
 // Repeat USDB and ETH to fill the array
