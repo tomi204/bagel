@@ -50,7 +50,7 @@ Bagel makes payroll **fully private on-chain** through three layers of protectio
 
 ```
                            ┌─────────────────────────┐
-                           │     Frontend (Next.js)   │
+                           │     Frontend (Next.js)  │
                            │                         │
                            │  Dashboard  Employees   │
                            │  History    Reports     │
@@ -58,7 +58,7 @@ Bagel makes payroll **fully private on-chain** through three layers of protectio
                            └────────┬────────────────┘
                                     │
                            ┌────────▼────────────────┐
-                           │   Zama Relayer SDK       │
+                           │   Zama Relayer SDK      │
                            │                         │
                            │  encrypt()  decrypt()   │
                            │  createEncryptedInput() │
@@ -66,7 +66,7 @@ Bagel makes payroll **fully private on-chain** through three layers of protectio
                            └────────┬────────────────┘
                                     │
               ┌─────────────────────▼─────────────────────┐
-              │            Ethereum (Sepolia)              │
+              │            Ethereum (Sepolia)             │
               │                                           │
               │  ┌───────────────┐    ┌────────────────┐  │
               │  │ BagelPayroll  │    │     CERC20     │  │
@@ -92,7 +92,7 @@ Bagel makes payroll **fully private on-chain** through three layers of protectio
               └───────────────────────────────────────────┘
                                     │
                            ┌────────▼────────────────┐
-                           │     TEE Operator         │
+                           │     TEE Operator        │
                            │                         │
                            │  Decrypt eaddress       │
                            │  Wait minDelay          │
