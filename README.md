@@ -1,99 +1,197 @@
-# Bagel — Private Global Payroll on Ethereum
+<p align="center">
+  <h1 align="center">Bagel</h1>
+  <p align="center"><strong>Private Global Payroll on Ethereum</strong></p>
+  <p align="center">
+    Bringing the $80B global payroll market on-chain with end-to-end privacy<br/>
+    using <strong>Zama fhEVM</strong> and a <strong>privacy pool</strong> for unlinkable transfers.
+  </p>
+</p>
 
-> Bringing the $80B global payroll market on-chain with end-to-end privacy using **Zama fhEVM** and a **privacy pool** for unlinkable transfers.
+<p align="center">
+  <a href="https://soliditylang.org/"><img src="https://img.shields.io/badge/Solidity-0.8.27-363636?logo=solidity&logoColor=white" alt="Solidity"/></a>
+  <a href="https://www.zama.ai/"><img src="https://img.shields.io/badge/Zama-fhEVM-7C3AED?logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiPjxyZWN0IHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgcng9IjQiIGZpbGw9IiM3QzNBRUQiLz48L3N2Zz4=" alt="Zama fhEVM"/></a>
+  <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-15-000000?logo=next.js&logoColor=white" alt="Next.js"/></a>
+  <a href="https://hardhat.org/"><img src="https://img.shields.io/badge/Hardhat-2.27-FFF100?logo=hardhat&logoColor=black" alt="Hardhat"/></a>
+  <a href="https://ethereum.org/"><img src="https://img.shields.io/badge/Ethereum-Sepolia-3C3C3D?logo=ethereum&logoColor=white" alt="Ethereum"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"/></a>
+</p>
 
-[![Solidity](https://img.shields.io/badge/Solidity-0.8.27-363636?logo=solidity)](https://soliditylang.org/)
-[![Zama fhEVM](https://img.shields.io/badge/Zama-fhEVM-7C3AED)](https://www.zama.ai/)
-[![Next.js](https://img.shields.io/badge/Next.js-15-000?logo=next.js)](https://nextjs.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#architecture">Architecture</a> &bull;
+  <a href="#privacy-pool">Privacy Pool</a> &bull;
+  <a href="#contracts">Contracts</a> &bull;
+  <a href="#demo">Demo</a>
+</p>
 
 ---
 
-## The Problem
+## Why Bagel?
 
-Payroll on public blockchains exposes **every salary, bonus, and payment** to anyone with a block explorer. Employees, competitors, and adversaries can see exactly who earns what. This is a dealbreaker for enterprise adoption.
+### The Problem
 
-## The Solution
+Payroll on public blockchains is a **non-starter for enterprises**. Every salary, bonus, and payment is visible to anyone with a block explorer. Employees can see each other's compensation. Competitors can reverse-engineer your cost structure. This fundamentally breaks the confidentiality that businesses require.
 
-Bagel encrypts **all financial data** on-chain using Fully Homomorphic Encryption (FHE). Salary rates, balances, and transfer amounts remain encrypted at all times — even validators cannot see plaintext values. Computations (accrual, payments) run directly on ciphertext via Zama's fhEVM coprocessor.
+### Our Solution
 
-Additionally, Bagel introduces a **privacy pool** (`BagelPool`) that breaks the on-chain sender → recipient link, making payroll transfers unlinkable.
+Bagel makes payroll **fully private on-chain** through three layers of protection:
+
+| Layer | What It Protects | How |
+|-------|-----------------|-----|
+| **FHE Encryption** | All financial data (salaries, balances, amounts) | Zama fhEVM — computations run on encrypted data without ever decrypting |
+| **ERC7984 Confidential Tokens** | Token balances and transfer amounts | USDBagel (CERC20) — balances are encrypted `euint64` handles |
+| **BagelPool Privacy Pool** | Sender ↔ recipient relationship | Encrypted recipient address (`eaddress`) + TEE-based distribution |
+
+**Result**: An observer sees encrypted ciphertext on-chain. No plaintext salaries. No visible payment graph. No linkable transfers.
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                     Frontend (Next.js)                    │
-│  Dashboard · Employees · History · Reports · Wallets     │
-├──────────────────────────────────────────────────────────┤
-│              Zama Relayer SDK (FHE Client)                │
-│         encrypt() · decrypt() · createInstance()         │
-├──────────────────────────────────────────────────────────┤
-│                  Ethereum (Sepolia)                       │
-│                                                          │
-│  ┌──────────────┐  ┌──────────┐  ┌──────────────────┐   │
-│  │ BagelPayroll │  │  CERC20  │  │    BagelPool     │   │
-│  │              │  │ (ERC7984)│  │  (Privacy Pool)  │   │
-│  │ register()   │  │          │  │                  │   │
-│  │ deposit()    │  │ balances │  │ queueTransfer()  │   │
-│  │ addEmployee()│  │ transfer │  │ distribute()     │   │
-│  │ accrue()     │  │          │  │                  │   │
-│  │ withdraw()   │  │ all FHE  │  │ eaddress+euint64 │   │
-│  └──────────────┘  └──────────┘  └──────────────────┘   │
-│         ▲                              │                 │
-│         │              TEE Operator    ▼                 │
-│         │            (decrypt & distribute)              │
-└──────────────────────────────────────────────────────────┘
+                           ┌─────────────────────────┐
+                           │     Frontend (Next.js)   │
+                           │                         │
+                           │  Dashboard  Employees   │
+                           │  History    Reports     │
+                           │  Wallets    Privacy     │
+                           └────────┬────────────────┘
+                                    │
+                           ┌────────▼────────────────┐
+                           │   Zama Relayer SDK       │
+                           │                         │
+                           │  encrypt()  decrypt()   │
+                           │  createEncryptedInput() │
+                           │  userDecrypt()          │
+                           └────────┬────────────────┘
+                                    │
+              ┌─────────────────────▼─────────────────────┐
+              │            Ethereum (Sepolia)              │
+              │                                           │
+              │  ┌───────────────┐    ┌────────────────┐  │
+              │  │ BagelPayroll  │    │     CERC20     │  │
+              │  │               │    │   (ERC7984)    │  │
+              │  │ registerBiz() │◄──►│                │  │
+              │  │ deposit()     │    │ encBalances    │  │
+              │  │ addEmployee() │    │ confTransfer() │  │
+              │  │ accrue()      │    │ confTransferF()│  │
+              │  │ withdraw()    │    │ setOperator()  │  │
+              │  └───────────────┘    └───────┬────────┘  │
+              │                               │           │
+              │                    ┌──────────▼────────┐  │
+              │                    │    BagelPool      │  │
+              │                    │  (Privacy Pool)   │  │
+              │                    │                   │  │
+              │                    │ queueTransfer()   │  │
+              │                    │  └─ eaddress      │  │
+              │                    │  └─ euint64       │  │
+              │                    │                   │  │
+              │                    │ distribute()      │  │
+              │                    │  └─ TEE only      │  │
+              │                    └───────────────────┘  │
+              └───────────────────────────────────────────┘
+                                    │
+                           ┌────────▼────────────────┐
+                           │     TEE Operator         │
+                           │                         │
+                           │  Decrypt eaddress       │
+                           │  Wait minDelay          │
+                           │  Batch distribute       │
+                           └─────────────────────────┘
 ```
 
 ### Tech Stack
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| Smart Contracts | Solidity + `@fhevm/solidity` | Encrypted payroll logic |
-| Confidential Token | ERC7984 (`CERC20.sol`) | Encrypted balances & transfers |
-| Privacy Pool | `BagelPool.sol` | Breaks sender-recipient link on-chain |
-| FHE Client | Zama Relayer SDK + `ethers.js` | Client-side encrypt/decrypt |
-| Frontend | Next.js 15 + TypeScript | Full-featured employer/employee UI |
-| Compliance | Range Protocol API | Wallet screening & risk scoring |
-| Framework | Hardhat + `@fhevm/hardhat-plugin` | Build, test, deploy |
+| **Smart Contracts** | Solidity 0.8.27 + [`@fhevm/solidity`](https://docs.zama.ai/fhevm) | Encrypted payroll logic with FHE operations |
+| **Confidential Token** | [ERC7984](https://eips.ethereum.org/EIPS/eip-7984) via OpenZeppelin Confidential | Encrypted ERC20 balances and transfers |
+| **Privacy Pool** | `BagelPool.sol` | Breaks sender-recipient link using `eaddress` + TEE |
+| **FHE Client** | [Zama Relayer SDK](https://www.npmjs.com/package/@zama-fhe/relayer-sdk) v0.4.1 | Client-side encryption, decryption, key management |
+| **Frontend** | Next.js 15 + React 18 + TypeScript | 8 pages: Dashboard, Employees, History, Reports, Wallets, Privacy Audit |
+| **Wallet** | MetaMask + ethers.js v6 | EIP-1193 provider, EIP-712 signing for FHE decryption |
+| **Compliance** | [Range Protocol](https://range.org/) API | OFAC sanctions screening, wallet risk scoring |
+| **Build** | Hardhat + [`@fhevm/hardhat-plugin`](https://www.npmjs.com/package/@fhevm/hardhat-plugin) | Compile, test, deploy with FHE support |
 
 ---
 
 ## Privacy Guarantees
 
-| Data | On-Chain Visibility | Method |
-|------|-------------------|--------|
-| Salary Rate | **Encrypted** | `euint64` via `FHE.fromExternal()` |
-| Accrued Balance | **Encrypted** | Homomorphic `FHE.mul(salary, time)` |
-| Business Balance | **Encrypted** | Homomorphic `FHE.add()` / `FHE.sub()` |
-| Transfer Amounts | **Encrypted** | ERC7984 confidential transfers |
-| Employer/Employee IDs | **Encrypted** | `euint64` hash |
-| Sender → Recipient Link | **Broken** | BagelPool privacy pool + TEE distribution |
-| Recipient Address | **Encrypted** | `eaddress` stored on-chain in pool queue |
+Every piece of financial data in Bagel is encrypted using Zama's FHE. Here's what an observer sees vs. what actually exists:
+
+| Data | What An Observer Sees | What Actually Exists |
+|------|----------------------|---------------------|
+| Salary Rate | `0x7f3a...8b2c` (ciphertext) | `100` USDB/second |
+| Employee Balance | `0x4e91...c7d0` (ciphertext) | `50,000.00` USDB |
+| Business Vault | `0xa2b3...f4e5` (ciphertext) | `1,000,000.00` USDB |
+| Transfer Amount | `0x8c1d...9e0f` (ciphertext) | `5,000.00` USDB |
+| Employer Identity | `0x6d2e...a1b3` (ciphertext) | `0x026b...36Cd` |
+| Employee Identity | `0x3f4a...b5c6` (ciphertext) | `0x1a2b...3c4d` |
+| Who Paid Whom | Sender → Pool, Pool → Recipient | Sender paid Recipient |
+
+### FHE Operations
+
+```solidity
+// All operations happen on encrypted data — no decryption needed
+FHE.fromExternal(input, proof)     // Ingest encrypted client input with ZK proof
+FHE.add(euint64, euint64)          // Encrypted addition (deposits, accrual)
+FHE.sub(euint64, euint64)          // Encrypted subtraction (withdrawals)
+FHE.mul(euint64, uint64)           // Encrypted × plaintext (salary × elapsed time)
+FHE.allow(handle, address)         // Grant cross-contract ciphertext access
+FHE.allowThis(handle)              // Grant self-access to ciphertext
+```
 
 ---
 
-## Privacy Pool (BagelPool)
+## Privacy Pool
 
-Standard confidential transfers encrypt the **amount** but the sender-recipient link remains visible on-chain. BagelPool solves this:
+### The Gap in Confidential Transfers
+
+Standard ERC7984 `confidentialTransfer` encrypts the **amount** but the sender → recipient link remains visible:
 
 ```
-1. Sender → BagelPool.queueTransfer(encRecipient, encAmount)
-   On-chain: sender → pool (encrypted amount, encrypted recipient)
-
-2. TEE Operator decrypts recipient, waits minDelay, calls distribute()
-   On-chain: pool → recipient (encrypted amount)
-
-Result: No direct on-chain link between sender and recipient.
+0x026b...36Cd  ──(encrypted amount)──►  0x1a2b...3c4d
+     ▲                                       ▲
+  Employer                               Employee
+  (public)                               (public)
 ```
 
-- **`eaddress`**: Recipient address encrypted with FHE on-chain
-- **`minDelay`**: Configurable delay between queue and distribute (default: 5 min)
-- **`batchDistribute`**: TEE can batch multiple transfers for better anonymity
-- **TEE Operator**: Runs inside a Trusted Execution Environment (the only entity that knows the mapping)
+Anyone can see who pays whom, even if they can't see how much.
+
+### How BagelPool Fixes This
+
+```
+Step 1: Employer queues transfer with encrypted recipient
+┌──────────────┐     queueTransfer()     ┌─────────────┐
+│   Employer   │ ──────────────────────► │  BagelPool  │
+│ 0x026b..36Cd │   eaddress + euint64    │             │
+└──────────────┘   (both encrypted)      └──────┬──────┘
+                                                │
+Step 2: TEE operator decrypts and distributes   │ (after minDelay)
+                                                │
+                   distribute()          ┌──────▼──────┐
+┌──────────────┐ ◄────────────────────── │  BagelPool  │
+│   Employee   │    encrypted amount     │             │
+│ 0x1a2b..3c4d │                         └─────────────┘
+└──────────────┘
+
+On-chain record:
+  TX1: 0x026b..36Cd → BagelPool  (encrypted amount, encrypted recipient)
+  TX2: BagelPool → 0x1a2b..3c4d  (encrypted amount)
+
+  No direct link between TX1 and TX2.
+```
+
+### Privacy Pool Features
+
+| Feature | Details |
+|---------|---------|
+| **Encrypted Recipient** | `eaddress` type — recipient address encrypted with FHE on-chain |
+| **Encrypted Amount** | `euint64` — transfer amount encrypted end-to-end |
+| **Minimum Delay** | Configurable time gap between queue and distribute (default: 5 min) |
+| **Batch Distribution** | TEE can distribute multiple transfers in one tx for better anonymity |
+| **Operator Authorization** | Only the TEE wallet can call `distribute()` |
+| **Cross-Contract FHE** | `FHE.allow(amount, address(token))` enables CERC20 to access pool ciphertexts |
 
 ---
 
@@ -101,63 +199,115 @@ Result: No direct on-chain link between sender and recipient.
 
 ### Deployed on Sepolia
 
-| Contract | Address | Purpose |
-|----------|---------|---------|
-| `CERC20` (USDBagel) | `0xb01DDDa550C5aA2624d1D0aF0D4A6826350C49F2` | Confidential ERC20 token |
-| `BagelPayroll` | `0x6bEE22620286aE720416348636250df26CF91CA3` | Payroll management |
-| `BagelPool` | `0x9afFE57d5751d11929dA1cC6a4ff1cE70DF92E50` | Privacy pool |
+| Contract | Address | Etherscan |
+|----------|---------|-----------|
+| **CERC20** (USDBagel) | `0xb01DDDa550C5aA2624d1D0aF0D4A6826350C49F2` | [View](https://sepolia.etherscan.io/address/0xb01DDDa550C5aA2624d1D0aF0D4A6826350C49F2) |
+| **BagelPayroll** | `0x6bEE22620286aE720416348636250df26CF91CA3` | [View](https://sepolia.etherscan.io/address/0x6bEE22620286aE720416348636250df26CF91CA3) |
+| **BagelPool** | `0x9afFE57d5751d11929dA1cC6a4ff1cE70DF92E50` | [View](https://sepolia.etherscan.io/address/0x9afFE57d5751d11929dA1cC6a4ff1cE70DF92E50) |
 
-### FHE Operations Used
+### Contract Details
 
-```solidity
-FHE.fromExternal(input, proof)     // Validate encrypted client inputs
-FHE.add(euint64, euint64)          // Homomorphic addition (deposits, accrual)
-FHE.sub(euint64, euint64)          // Homomorphic subtraction (withdrawals)
-FHE.mul(euint64, uint64)           // Ciphertext × plaintext (salary × time)
-FHE.allow(handle, address)         // Grant contract access to ciphertext
-FHE.allowThis(handle)              // Grant self access
+#### `BagelPayroll.sol`
+The core payroll contract. All salary data is encrypted with FHE.
+
+- `registerBusiness(encEmployerId, proof)` — Register with encrypted employer ID
+- `deposit(businessIndex, encAmount, proof)` — Deposit encrypted amount to business vault
+- `addEmployee(businessIndex, encId, encSalary, proof)` — Add employee with encrypted salary
+- `accrueSalary(businessIndex, employeeIndex)` — Homomorphic: `encSalary × elapsedTime`
+- `requestWithdrawal(businessIndex, employeeIndex, encAmount, proof)` — Withdraw accrued salary
+
+#### `CERC20.sol` (USDBagel)
+ERC7984 confidential token. 6 decimals. All balances are `euint64`.
+
+- `confidentialTransfer(to, encAmount, proof)` — Transfer with encrypted amount
+- `confidentialTransferFrom(from, to, amount)` — Operator-authorized transfer (used by BagelPool)
+- `confidentialBalanceOf(account)` — Returns encrypted balance handle
+- `setOperator(operator, until)` — Time-bounded operator approval
+- `mint(to, amount)` — Owner-only minting (used by faucet)
+
+#### `BagelPool.sol`
+Privacy pool that breaks the sender-recipient link.
+
+- `queueTransfer(encRecipient, encAmount, proof)` — Queue transfer with encrypted recipient (`eaddress`)
+- `distribute(index, recipient)` — TEE-only: distribute to decrypted recipient
+- `batchDistribute(indices, recipients)` — TEE-only: batch distribution
+- `setOperator(operator)` — Update TEE operator address
+- `setMinDelay(delay)` — Update minimum queue-to-distribute delay
+
+---
+
+## Payroll Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        EMPLOYER FLOW                                │
+│                                                                     │
+│  1. Register Business                                               │
+│     └─ encEmployerId = encrypt(hash(walletAddress))                │
+│     └─ On-chain: only ciphertext stored                            │
+│                                                                     │
+│  2. Mint Test Tokens (Faucet)                                       │
+│     └─ POST /api/faucet { address }                                │
+│     └─ Mints 10,000 USDBagel to wallet                             │
+│                                                                     │
+│  3. Deposit Funds                                                   │
+│     └─ encrypt(amount) → BagelPayroll.deposit()                    │
+│     └─ Business vault: FHE.add(currentBalance, encAmount)          │
+│                                                                     │
+│  4. Add Employee                                                    │
+│     └─ encrypt(employeeId, salaryPerSecond)                        │
+│     └─ BagelPayroll.addEmployee() + setEmployeeAddress()           │
+│                                                                     │
+│  5. Pay Employee (via Privacy Pool)                                 │
+│     └─ encrypt(recipientAddress, amount)                           │
+│     └─ BagelPool.queueTransfer() — breaks sender-recipient link   │
+│     └─ TEE distributes after minDelay                              │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                        EMPLOYEE FLOW                                │
+│                                                                     │
+│  1. View Encrypted Balance                                          │
+│     └─ CERC20.confidentialBalanceOf() → encrypted handle           │
+│                                                                     │
+│  2. Decrypt Balance (EIP-712 Signature)                             │
+│     └─ Sign decryption request → Zama Relayer → plaintext value    │
+│                                                                     │
+│  3. Accrue Salary                                                   │
+│     └─ BagelPayroll.accrueSalary()                                 │
+│     └─ FHE.mul(encSalary, elapsedSeconds) — homomorphic            │
+│                                                                     │
+│  4. Withdraw                                                        │
+│     └─ encrypt(amount) → BagelPayroll.requestWithdrawal()          │
+│     └─ FHE.sub(encAccrued, encAmount)                              │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Project Structure
+## Frontend
 
-```
-Bagel-EVM/
-├── contracts/
-│   ├── BagelPayroll.sol              # Payroll contract (all fields FHE-encrypted)
-│   ├── BagelPool.sol                 # Privacy pool (eaddress + euint64 queue)
-│   └── tokens/
-│       └── CERC20.sol                # ERC7984 confidential token (USDBagel)
-├── deploy/
-│   └── deploy.ts                     # Deployment script (CERC20 → Payroll → Pool)
-├── app/                              # Next.js frontend
-│   ├── pages/
-│   │   ├── dashboard.tsx             # Main dashboard (employer/employee views)
-│   │   ├── employees.tsx             # Employee management & on-chain registration
-│   │   ├── history.tsx               # Transaction history (Etherscan integration)
-│   │   ├── reports.tsx               # Analytics & Range compliance checks
-│   │   ├── wallets.tsx               # Wallet details, balances, FHE status
-│   │   ├── privacy-audit.tsx         # Privacy stack demo for judges
-│   │   └── terms.tsx                 # Terms & conditions
-│   ├── pages/api/
-│   │   ├── faucet.ts                 # Testnet token faucet
-│   │   └── distribute.ts            # TEE distributor endpoint (pool → recipients)
-│   ├── lib/
-│   │   ├── fhevm.ts                  # Zama Relayer SDK wrapper (encrypt/decrypt)
-│   │   ├── contract-client.ts        # Contract interactions + privateTransfer()
-│   │   ├── range.ts                  # Range Protocol compliance client
-│   │   └── format.ts                 # Number formatting utilities
-│   ├── hooks/
-│   │   ├── useBagel.ts               # React hook for payroll operations
-│   │   └── useTransactions.ts        # Transaction history hook (Etherscan API)
-│   └── components/
-│       ├── WalletButton.tsx          # MetaMask connect/disconnect
-│       ├── BalanceDisplay.tsx        # Encrypted balance with decrypt
-│       └── ui/                       # Charts, loaders, hero animation
-├── hardhat.config.ts
-└── package.json
-```
+### Pages
+
+| Route | Description |
+|-------|-------------|
+| `/` | Landing page with animated hero, feature highlights, and CTA |
+| `/dashboard` | Main dashboard — employer payroll management and employee portal |
+| `/employees` | Employee management — add, edit, remove with on-chain registration |
+| `/history` | Transaction history — fetches from Etherscan Sepolia API with filtering |
+| `/reports` | Analytics — payroll stats, transaction trends, Range compliance checks |
+| `/wallets` | Wallet details — ETH balance, encrypted USDB balance, contract addresses |
+| `/privacy-audit` | Privacy demo — shows encrypted vs. decrypted data for judges |
+| `/terms` | Terms and conditions |
+
+### API Routes
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/faucet` | POST | Mint 10,000 USDBagel test tokens (rate limited: 1/hour) |
+| `/api/distribute` | POST `{action: "register"}` | Register recipient for pool queue index |
+| `/api/distribute` | POST `{action: "distribute"}` | Trigger TEE distribution of pending transfers |
+| `/api/distribute` | GET | Pool status (queue length, pending, distributed) |
 
 ---
 
@@ -165,80 +315,161 @@ Bagel-EVM/
 
 ### Prerequisites
 
-- Node.js >= 20
-- MetaMask (connected to Sepolia)
-- Sepolia ETH for gas ([faucet](https://sepoliafaucet.com/))
+- **Node.js** >= 20
+- **MetaMask** browser extension (connected to Sepolia)
+- **Sepolia ETH** for gas — [Sepolia Faucet](https://sepoliafaucet.com/)
 
-### Install & Run
+### Run Locally
 
 ```bash
+# Clone
+git clone https://github.com/tomi204/bagel.git
+cd bagel
+
 # Install contract dependencies
 npm install
 
 # Install frontend dependencies
 cd app && npm install
 
-# Start frontend (connects to deployed Sepolia contracts)
+# Start dev server (uses deployed Sepolia contracts)
 npm run dev
+# → http://localhost:3000
 ```
 
 ### Deploy Your Own Contracts
 
 ```bash
-# Set Hardhat vars
-npx hardhat vars set MNEMONIC "your twelve word mnemonic phrase here"
-npx hardhat vars set INFURA_API_KEY "your-infura-key"
+# Configure Hardhat
+npx hardhat vars set MNEMONIC "your twelve word mnemonic here"
+npx hardhat vars set INFURA_API_KEY "your-infura-project-id"
 
-# Deploy to Sepolia
+# Deploy all contracts (CERC20 → BagelPayroll → BagelPool)
 npx hardhat deploy --network sepolia
 
-# Update app/.env.local with new contract addresses
+# Copy printed addresses to app/.env.local
 ```
 
 ### Environment Variables
 
+Create `app/.env.local`:
+
 ```env
-# app/.env.local
-NEXT_PUBLIC_RPC_URL=https://sepolia.infura.io/v3/<key>
+# RPC
+NEXT_PUBLIC_RPC_URL=https://sepolia.infura.io/v3/<your-key>
 NEXT_PUBLIC_CHAIN_ID=11155111
+
+# Contracts (from deployment output)
 NEXT_PUBLIC_PAYROLL_ADDRESS=0x...
 NEXT_PUBLIC_CERC20_ADDRESS=0x...
 NEXT_PUBLIC_POOL_ADDRESS=0x...
-DEPLOYER_PRIVATE_KEY=0x...  # Server-side only (faucet + distributor)
+
+# Server-side only (faucet + TEE distributor)
+DEPLOYER_PRIVATE_KEY=0x...
 ```
 
 ---
 
-## Payroll Flow
+## Project Structure
 
 ```
-1. Employer registers business
-   └─ encryptedEmployerId = FHE.fromExternal(hash(address))
-
-2. Employer deposits funds
-   └─ encryptedBalance += FHE.add(currentBalance, encryptedAmount)
-
-3. Employer adds employee with encrypted salary
-   └─ encryptedSalary = FHE.fromExternal(salaryPerSecond)
-
-4. Salary accrues over time (homomorphic computation)
-   └─ encryptedAccrued += FHE.mul(encryptedSalary, elapsedSeconds)
-
-5. Employee withdraws via privacy pool
-   └─ sender → BagelPool → TEE → recipient (unlinkable)
+bagel/
+├── contracts/
+│   ├── BagelPayroll.sol                 # Payroll contract — all fields FHE-encrypted
+│   ├── BagelPool.sol                    # Privacy pool — eaddress + euint64 queue
+│   └── tokens/
+│       └── CERC20.sol                   # ERC7984 confidential token (USDBagel, 6 decimals)
+│
+├── deploy/
+│   └── deploy.ts                        # Deploy script: CERC20 → BagelPayroll → BagelPool
+│
+├── deployments/sepolia/                 # Deployment artifacts (addresses, ABIs)
+│
+├── app/                                 # Next.js frontend
+│   ├── pages/
+│   │   ├── index.tsx                    # Landing page with animated hero
+│   │   ├── dashboard.tsx                # Main dashboard (employer + employee views)
+│   │   ├── employees.tsx                # Employee CRUD + on-chain registration
+│   │   ├── history.tsx                  # Transaction history (Etherscan API)
+│   │   ├── reports.tsx                  # Analytics + Range compliance
+│   │   ├── wallets.tsx                  # Wallet info, balances, FHE status
+│   │   ├── privacy-audit.tsx            # Privacy stack demo
+│   │   ├── employer.tsx                 # Simple employer view
+│   │   ├── employee.tsx                 # Simple employee view
+│   │   ├── terms.tsx                    # Terms & conditions
+│   │   └── send.tsx                     # Redirect → dashboard?transfer=true
+│   │
+│   ├── pages/api/
+│   │   ├── faucet.ts                    # Mint 10K USDBagel (rate limited)
+│   │   └── distribute.ts               # TEE distributor (register + distribute)
+│   │
+│   ├── lib/
+│   │   ├── fhevm.ts                     # Zama Relayer SDK wrapper
+│   │   │                                #   initFhevm(), encryptValue(),
+│   │   │                                #   encryptAddressAndValue(), decryptValue()
+│   │   ├── contract-client.ts           # Contract interaction layer
+│   │   │                                #   registerBusiness(), deposit(), addEmployee(),
+│   │   │                                #   privateTransfer(), getPoolStatus()
+│   │   ├── range.ts                     # Range Protocol compliance client
+│   │   │                                #   getRiskScore(), checkSanctions(),
+│   │   │                                #   fullComplianceCheck()
+│   │   └── format.ts                    # formatBalance() utility
+│   │
+│   ├── hooks/
+│   │   ├── useBagel.ts                  # React hook for all payroll operations
+│   │   └── useTransactions.ts           # Transaction history from Etherscan API
+│   │
+│   ├── components/
+│   │   ├── WalletButton.tsx             # MetaMask connect/disconnect
+│   │   ├── BalanceDisplay.tsx           # Navbar encrypted balance + decrypt
+│   │   ├── NetworkWarning.tsx           # Wrong chain warning banner
+│   │   └── ui/
+│   │       ├── scroll-morph-hero.tsx    # Animated landing hero with 3D coin flip
+│   │       ├── holo-pulse-loader.tsx    # Loading animation
+│   │       ├── payroll-chart.tsx        # Payroll bar chart
+│   │       ├── crypto-distribution-chart.tsx  # Token distribution pie chart
+│   │       ├── card.tsx                 # Reusable card component
+│   │       └── toaster.tsx              # Toast notifications
+│   │
+│   ├── styles/globals.css               # Tailwind + Bagel theme (orange, cream, dark)
+│   ├── public/
+│   │   ├── eth-logo.png                 # ETH coin logo (local)
+│   │   └── usdb-logo.png               # USDB coin logo (local)
+│   └── next.config.js                   # Webpack/Turbopack config with FHE WASM support
+│
+├── hardhat.config.ts                    # Hardhat config (Sepolia, compiler settings)
+├── package.json
+└── LICENSE
 ```
 
 ---
 
 ## Compliance
 
-Bagel integrates [Range Protocol](https://range.org/) for wallet screening:
+Bagel integrates [Range Protocol](https://range.org/) for regulatory compliance:
 
-- **Risk Score API**: 1-10 risk assessment per wallet
-- **Sanctions Check**: OFAC + token blacklist screening
-- **Per-Employee Compliance**: Screen employee wallets before onboarding
+| Check | Endpoint | Description |
+|-------|----------|-------------|
+| **Risk Score** | `GET /v1/risk/address?address={addr}&network=ethereum` | 1-10 risk assessment with reasoning |
+| **OFAC Sanctions** | `GET /v1/risk/sanctions/{addr}` | Check if address is on OFAC sanctions list |
+| **Token Blacklist** | Same endpoint | Check if address is on any token blacklist |
 
-Results are displayed in the Reports dashboard with pass/fail indicators.
+The Reports page displays:
+- Overall wallet risk score with pass/fail status
+- Per-employee compliance screening
+- OFAC and blacklist status for all registered wallets
+
+---
+
+## Security Considerations
+
+| Concern | Mitigation |
+|---------|------------|
+| **TEE trust** | BagelPool TEE operator knows the sender-recipient mapping. In production, runs inside AWS Nitro Enclaves / Intel SGX with sealed keys. |
+| **Low anonymity set** | If only 1 transfer is in the pool queue, the link is trivially guessable. Batch distribution and minimum delay mitigate this. |
+| **FHE key management** | Decryption requires wallet signature (EIP-712). Only the handle owner can authorize decryption via the Zama Relayer. |
+| **Contract upgradability** | Contracts are not upgradeable. Deployed and immutable. |
+| **Faucet abuse** | Rate limited to 1 claim per address per hour. Server-side private key used for minting. |
 
 ---
 
@@ -250,4 +481,4 @@ Built by [ConejoCapital](https://github.com/ConejoCapital) | [tomi204](https://g
 
 ## License
 
-MIT
+[MIT](LICENSE)
